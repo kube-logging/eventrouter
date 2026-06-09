@@ -1,0 +1,10 @@
+.git/
+.github/
+bin/
+eventrouter
+*.test
+*.prof
+coverage.out
+.licensei.cache
+*.md
+deploy/
