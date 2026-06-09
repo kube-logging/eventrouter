@@ -1,42 +1,33 @@
-# Copyright 2017 Heptio Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+FROM --platform=$BUILDPLATFORM golang:1.26.4-alpine3.22@sha256:727cfc3c40be55cd1bc9a4a059406b28a059857e3be752aa9d09531e12c20c56 AS builder
 
-FROM --platform=$BUILDPLATFORM golang:1.25.2-alpine3.22@sha256:06cdd34bd531b810650e47762c01e025eb9b1c7eadd191553b91c9f2d549fae8 AS builder
-
-RUN apk add --update --no-cache ca-certificates make git curl
+RUN apk add --update --no-cache ca-certificates
 
 ARG TARGETOS
 ARG TARGETARCH
-ARG TARGETPLATFORM
+ARG GO_BUILD_FLAGS
 
-WORKDIR /app
-
-ARG GOPROXY
+WORKDIR /usr/local/src/eventrouter
 
 COPY go.mod go.mod
 COPY go.sum go.sum
 
+# cache deps before building and copying source so that we don't need to re-download as much
+# and so that source changes don't invalidate our downloaded layer
 RUN go mod download
 
-COPY *.go /app/
-COPY sinks/ /app/sinks/
-COPY Makefile /app/Makefile
+COPY cmd/ cmd/
+COPY sinks/ sinks/
 
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH make build
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build $GO_BUILD_FLAGS -o /usr/local/bin/eventrouter ./cmd
 
-FROM gcr.io/distroless/static:latest@sha256:87bce11be0af225e4ca761c40babb06d6d559f5767fbf7dc3c47f0f1a466b92c
+FROM builder AS debug
 
-COPY --from=builder /app/eventrouter /app/eventrouter
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go install github.com/go-delve/delve/cmd/dlv@latest
 
-CMD ["/app/eventrouter", "-v=3", "-logtostderr"]
+CMD ["/go/bin/dlv", "--listen=:40000", "--headless=true", "--api-version=2", "--accept-multiclient", "exec", "/usr/local/bin/eventrouter"]
+
+FROM gcr.io/distroless/static:nonroot@sha256:963fa6c544fe5ce420f1f54fb88b6fb01479f054c8056d0f74cc2c6000df5240
+
+COPY --from=builder /usr/local/bin/eventrouter /eventrouter
+
+ENTRYPOINT ["/eventrouter"]

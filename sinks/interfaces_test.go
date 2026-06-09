@@ -14,24 +14,26 @@
 
 package sinks
 
-import (
-	"log/slog"
+import "testing"
 
-	corev1 "k8s.io/api/core/v1"
-)
-
-// EventSinkInterface is the interface used to shunt events.
-type EventSinkInterface interface {
-	UpdateEvents(eNew, eOld *corev1.Event)
-}
-
-// ManufactureSink builds a sink for the given name, falling back to stdout.
-func ManufactureSink(sink, stdoutNamespace string) EventSinkInterface {
-	switch sink {
-	case "stdout":
-		return NewStdoutSink(stdoutNamespace)
-	default:
-		slog.Warn("unknown or unsupported sink, defaulting to stdout", "sink", sink)
-		return NewStdoutSink("")
+func TestManufactureSink(t *testing.T) {
+	tests := []struct {
+		name string
+		sink string
+	}{
+		{"stdout", "stdout"},
+		{"unknown falls back to stdout", "bogus"},
+		{"empty falls back to stdout", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ManufactureSink(tt.sink, "")
+			if got == nil {
+				t.Fatal("ManufactureSink() returned nil")
+			}
+			if _, ok := got.(*StdoutSink); !ok {
+				t.Fatalf("ManufactureSink() = %T, want *StdoutSink", got)
+			}
+		})
 	}
 }

@@ -1,0 +1,92 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eventrouter
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: eventrouter
+rules:
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["get", "watch", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: eventrouter
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: eventrouter
+subjects:
+- kind: ServiceAccount
+  name: eventrouter
+  namespace: kube-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eventrouter
+  namespace: kube-system
+  labels:
+    app: eventrouter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: eventrouter
+  template:
+    metadata:
+      labels:
+        app: eventrouter
+        tier: control-plane-addons
+    spec:
+      serviceAccountName: eventrouter
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: kube-eventrouter
+          image: ghcr.io/kube-logging/eventrouter:latest
+          imagePullPolicy: Always
+          # Configuration is supplied via EVENTROUTER_* env vars; all have sane
+          # defaults, so these are shown for discoverability.
+          env:
+            - name: EVENTROUTER_SINK
+              value: stdout
+            - name: EVENTROUTER_LOG_FORMAT
+              value: json
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: http
+              containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi

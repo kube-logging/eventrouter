@@ -1,22 +1,22 @@
-## DCO Sign off
+# DCO Sign off
 
 All authors to the project retain copyright to their work. However, to ensure
 that they are only submitting work that they have rights to, we are requiring
-everyone to acknowldge this by signing their work.
+everyone to acknowledge this by signing their work.
 
-Any copyright notices in this repos should specify the authors as "the contributors".
+Any copyright notices in this repo should specify the authors as "Kube logging authors".
 
 To sign your work, just add a line like this at the end of your commit message:
 
-```
-Signed-off-by: Joe Beda <joe@heptio.com>
+```sh
+Signed-off-by: Jane Doe <jane.doe@example.com>
 ```
 
 This can easily be done with the `--signoff` option to `git commit`.
 
-By doing this you state that you can certify the following (from https://developercertificate.org/):
+By doing this you state that you can certify the following (from <https://developercertificate.org/>):
 
-```
+```sh
 Developer Certificate of Origin
 Version 1.1
 

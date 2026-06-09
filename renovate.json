@@ -1,0 +1,83 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigestsToSemver",
+    ":semanticCommitTypeAll(chore)",
+    "schedule:daily",
+    "group:all"
+  ],
+  "configMigration": true,
+  "constraints": {
+    "go": "1.26"
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^Makefile$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)( versioning=(?<versioning>.*?))?( registryUrl=(?<registryUrl>.*?))?\\s.*?_VERSION\\s?:?=\\s?(?<currentValue>.*)\\s"
+      ],
+      "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}",
+      "description": [
+        "Custom dependency manager for updating tools defined in Makefiles."
+      ]
+    }
+  ],
+  "enabled": true,
+  "enabledManagers": [
+    "custom.regex",
+    "dockerfile",
+    "github-actions",
+    "gomod"
+  ],
+  "labels": [
+    "dependencies"
+  ],
+  "osvVulnerabilityAlerts": true,
+  "vulnerabilityAlerts": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "matchPackageNames": [
+        "k8s.io/client-go"
+      ],
+      "allowedVersions": "/^v[0-9]+\\.[0-9]+\\.[0-9]+(\\.[0-9]+)?$/"
+    },
+    {
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "enabled": false
+    },
+    {
+      "matchUpdateTypes": [
+        "minor"
+      ],
+      "minimumReleaseAge": "60 days",
+      "matchPackageNames": [
+        "k8s.io{/,}**"
+      ]
+    },
+    {
+      "matchFileNames": [
+        "Makefile"
+      ],
+      "extractVersion": "^v(?<version>.*)$",
+      "description": [
+        "Add build label to PRs which are related to build tools defined in Makefiles.",
+        "Group Makefile dependency updates in single PR."
+      ]
+    }
+  ],
+  "postUpdateOptions": [
+    "gomodTidy",
+    "gomodUpdateImportPaths"
+  ],
+  "rebaseWhen": "behind-base-branch",
+  "semanticCommits": "enabled",
+  "timezone": "Etc/UTC"
+}

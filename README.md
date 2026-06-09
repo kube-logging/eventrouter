@@ -10,11 +10,14 @@ This project has several objectives, which include:
 * Persist events for longer period of time to allow for system debugging
 * Allows operators to forward events to other system(s) for archiving/ML/introspection/etc.
 * It should be relatively low overhead
-* Support for multiple _sinks_ should be configurable
+* Emit events to a pluggable _sink_
 
 ### NOTE
 
-By default, eventrouter is configured to leverage existing EFK stacks by outputting wrapped json object which are easy to index in elastic search.
+eventrouter writes each event as a structured JSON object to **stdout**, ready to be
+collected by a node-level log forwarder (for example [Fluent Bit][fluentbit] or
+[Fluentd][fluentd]) and shipped to your logging backend. `stdout` is currently the
+only built-in sink.
 
 ## Non-Goals
 
@@ -27,21 +30,64 @@ _sink_
 Standup:
 
 ```sh
-kubectl create -f https://raw.githubusercontent.com/kube-logging/eventrouter/master/yaml/eventrouter.yaml
+kubectl apply -f https://raw.githubusercontent.com/kube-logging/eventrouter/master/deploy/eventrouter.yaml
 ```
 
 Teardown:
 
 ```sh
-kubectl delete -f https://raw.githubusercontent.com/kube-logging/eventrouter/master/yaml/eventrouter.yaml
+kubectl delete -f https://raw.githubusercontent.com/kube-logging/eventrouter/master/deploy/eventrouter.yaml
 ```
+
+The manifest deploys eventrouter into the `kube-system` namespace with a `stdout` sink.
+See [`deploy/eventrouter.yaml`](deploy/eventrouter.yaml) for the full example and tweak it to fit your cluster.
 
 ### Inspecting the output
 
 ```sh
-kubectl logs -f deployment/eventrouter -n kube-system 
+kubectl logs -f deployment/eventrouter -n kube-system
 ```
 
-Watch events roll through the system and hopefully stream into your ES cluster for mining, Hooray!
+Watch events roll through the system as JSON, ready to be picked up by your log pipeline.
+Events are written to **stdout**; application logs are written to **stderr** (structured,
+JSON by default) so the two streams never mix.
+
+## Configuration
+
+eventrouter is configured entirely through environment variables — all are optional:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `EVENTROUTER_SINK` | `stdout` | Sink to emit events to. Only `stdout` is built in. |
+| `EVENTROUTER_STDOUT_NAMESPACE` | _(empty)_ | If set, wraps each event under this key in the JSON output. |
+| `EVENTROUTER_RESYNC_INTERVAL` | `30m` | Informer resync interval (Go duration). |
+| `EVENTROUTER_METRICS_ADDR` | `:8080` | Address for the metrics + health HTTP server. |
+| `EVENTROUTER_ENABLE_METRICS` | `true` | Enable the Prometheus `/metrics` endpoint. |
+| `EVENTROUTER_BOOKMARK_PATH` | _(empty)_ | Absolute path to persist the last seen resource version, to resume after a restart. |
+| `EVENTROUTER_KUBECONFIG` / `KUBECONFIG` | _(empty)_ | Path to a kubeconfig; defaults to in-cluster config. |
+| `EVENTROUTER_LOG_FORMAT` | `json` | Log format: `json` or `text`. |
+| `EVENTROUTER_LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, or `error`. |
+
+## Observability
+
+The HTTP server on `EVENTROUTER_METRICS_ADDR` exposes:
+
+* `GET /metrics` — Prometheus counters (`eventrouter_{normal,warning,info,unknown}_total`)
+* `GET /healthz` — liveness (always `200` while the process is up)
+* `GET /readyz` — readiness (`200` only once the informer cache has synced)
 
 [kubernetes]: https://github.com/kubernetes/kubernetes/ "Kubernetes"
+[fluentbit]: https://fluentbit.io/ "Fluent Bit"
+[fluentd]: https://www.fluentd.org/ "Fluentd"
+
+## Contributing
+
+If you find this project useful, help us
+
+* Support the development of this project and star this repo! :star:
+* Help new users with issues they may encounter. :muscle:
+* Send a pull request with your new features and bug fixes. :rocket:
+
+## License
+
+The project is licensed under the [Apache 2.0 License](LICENSE).
