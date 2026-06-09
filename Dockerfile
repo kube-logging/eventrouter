@@ -4,23 +4,30 @@ RUN apk add --update --no-cache ca-certificates
 
 ARG TARGETOS
 ARG TARGETARCH
+ARG GO_BUILD_FLAGS
 
-WORKDIR /app
-
-ARG GOPROXY
+WORKDIR /usr/local/src/eventrouter
 
 COPY go.mod go.mod
 COPY go.sum go.sum
 
+# cache deps before building and copying source so that we don't need to re-download as much
+# and so that source changes don't invalidate our downloaded layer
 RUN go mod download
 
-COPY cmd/ /app/cmd/
-COPY sinks/ /app/sinks/
+COPY cmd/ cmd/
+COPY sinks/ sinks/
 
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o eventrouter ./cmd
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build $GO_BUILD_FLAGS -o /usr/local/bin/eventrouter ./cmd
+
+FROM builder AS debug
+
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go install github.com/go-delve/delve/cmd/dlv@latest
+
+CMD ["/go/bin/dlv", "--listen=:40000", "--headless=true", "--api-version=2", "--accept-multiclient", "exec", "/usr/local/bin/eventrouter"]
 
 FROM gcr.io/distroless/static:nonroot@sha256:963fa6c544fe5ce420f1f54fb88b6fb01479f054c8056d0f74cc2c6000df5240
 
-COPY --from=builder /app/eventrouter /app/eventrouter
+COPY --from=builder /usr/local/bin/eventrouter /eventrouter
 
-CMD ["/app/eventrouter"]
+ENTRYPOINT ["/eventrouter"]
