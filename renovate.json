@@ -49,6 +49,13 @@
       "allowedVersions": "/^v[0-9]+\\.[0-9]+\\.[0-9]+(\\.[0-9]+)?$/"
     },
     {
+      "description": "Pin cosign-installer",
+      "matchPackageNames": [
+        "sigstore/cosign-installer"
+      ],
+      "enabled": false
+    },
+    {
       "matchUpdateTypes": [
         "minor"
       ],
