@@ -64,7 +64,7 @@ jobs:
 
       - name: Gather build metadata
         id: meta
-        uses: docker/metadata-action@818d4b7b91585d195f67373fd9cb0332e31a7175 # v4.6.0
+        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
         with:
           images: ${{ steps.image-name.outputs.value }}
           flavor: |
@@ -112,7 +112,7 @@ jobs:
           for tag in ${TAGS[@]}; do
             images+="${tag}@${DIGEST} "
           done
-          
+
           cosign sign --yes --rekor-url "https://rekor.sigstore.dev/" ${images}
 
       - name: Verify signed image with cosign
@@ -134,7 +134,7 @@ jobs:
           tar -xf image.tar -C image
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0 # 0.29.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           input: image
           format: sarif
