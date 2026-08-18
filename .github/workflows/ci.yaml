@@ -77,9 +77,15 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: make license-check
 
+  vulncheck:
+    name: Vulnerability check
+    uses: ./.github/workflows/vulncheck.yaml
+    permissions:
+      contents: read
+
   artifacts:
     name: Artifacts
-    needs: [test, lint, license-check]
+    needs: [test, lint, license-check, vulncheck]
     uses: ./.github/workflows/artifacts.yaml
     with:
       publish: ${{ github.event_name == 'push' }}

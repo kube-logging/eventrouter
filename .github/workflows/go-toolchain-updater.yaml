@@ -1,0 +1,101 @@
+name: Go toolchain updater
+
+# Opens a PR when a newer stable Go patch release is available, bumping both go.mod's
+# "go" directive and the Dockerfile builder base together.
+#
+# Why this exists alongside Renovate: the Dockerfile pinned golang:1.26.4-alpine3.22, and
+# upstream never published 1.26.5+ for the alpine3.22 variant line. Renovate had no
+# candidate to offer for a pinned-variant bump, so the builder sat on a Go with known
+# stdlib CVEs and nothing flagged it. hack/update-go-toolchain.sh re-discovers the newest
+# published alpine variant rather than assuming the current one still gets builds.
+#
+# Renovate still owns module dependencies (gomod), GitHub Actions, and Makefile tools —
+# this workflow deliberately covers only the Go toolchain, which Renovate cannot express
+# as a single coordinated change across go.mod and the Dockerfile.
+
+on:
+  schedule:
+    - cron: '23 7 * * 1'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Detect only — do not open a PR'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: go-toolchain-updater
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Check for Go toolchain update
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Apply toolchain update
+        id: update
+        run: hack/update-go-toolchain.sh
+
+      # Everything below is skipped when already current, so a no-op run stays cheap.
+      - name: Verify the updated tree
+        if: steps.update.outputs.updated == 'true'
+        env:
+          GOTOOLCHAIN: go${{ steps.update.outputs.latest_go }}
+        run: |
+          go version
+          make test
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+      - name: Create pull request
+        # dry_run is null on schedule runs, so compare explicitly rather than relying on
+        # null being falsy.
+        if: steps.update.outputs.updated == 'true' && inputs.dry_run != true
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          branch: chore/go-toolchain-${{ steps.update.outputs.latest_go }}
+          # Match the repo's Renovate convention (:semanticCommitTypeAll(chore)).
+          commit-message: |
+            chore(deps): update Go toolchain to ${{ steps.update.outputs.latest_go }}
+
+            Bumps the go.mod directive and the Dockerfile builder base together so the
+            released image and CI analysis share one toolchain.
+          title: 'chore(deps): update Go toolchain to ${{ steps.update.outputs.latest_go }}'
+          labels: dependencies
+          delete-branch: true
+          body: |
+            Automated Go toolchain update: **${{ steps.update.outputs.current_go }} → ${{ steps.update.outputs.latest_go }}**
+
+            Builder base: `${{ steps.update.outputs.image }}`
+
+            Updates both places that must move together:
+
+            - `go.mod` `go` directive — also selects the toolchain CI installs, since the
+              workflows use `actions/setup-go` with `go-version-file: go.mod`
+            - `Dockerfile` builder `FROM` — the toolchain the released image is built with
+
+            Verified in this run: `make test` and `govulncheck ./...` under Go
+            `${{ steps.update.outputs.latest_go }}`.
+
+            > Opened by `.github/workflows/go-toolchain-updater.yaml`. Renovate cannot
+            > express this as one change, and a pinned `-alpineX.Y` variant that stops
+            > receiving builds leaves it with no candidate to offer at all — which is how
+            > the builder previously stalled on a Go with known stdlib CVEs.

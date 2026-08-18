@@ -14,6 +14,10 @@ export PATH := $(BIN):$(PATH)
 
 GOVERSION := $(shell go env GOVERSION)
 
+# The toolchain declared in go.mod, used to pin vulnerability scanning. Scanning under a
+# newer Go than go.mod declares hides stdlib findings that still affect the built image.
+GOMOD_GOVERSION := $(shell sed -nE 's/^go ([0-9]+\.[0-9]+(\.[0-9]+)?)$$/\1/p' go.mod | head -1)
+
 GOLANGCI_LINT := $(BIN)/golangci-lint
 LICENSEI := ${BIN}/licensei
 
@@ -69,6 +73,15 @@ lint-fix: ${GOLANGCI_LINT} ## Run golangci-lint and perform fixes
 .PHONY: check-diff
 check-diff: tidy fmt ## Verify go.mod tidiness and formatting are committed.
 	git diff --exit-code
+
+.PHONY: vulncheck
+vulncheck: ## Scan for known vulnerabilities against the toolchain pinned in go.mod.
+	GOTOOLCHAIN=local go install golang.org/x/vuln/cmd/govulncheck@latest
+	GOTOOLCHAIN=go${GOMOD_GOVERSION} $(GOBIN)/govulncheck ./...
+
+.PHONY: update-go-toolchain
+update-go-toolchain: ## Bump go.mod and the Dockerfile builder to the latest stable Go patch.
+	hack/update-go-toolchain.sh
 
 .PHONY: license-cache
 license-cache: ${LICENSEI} ## Generate license cache

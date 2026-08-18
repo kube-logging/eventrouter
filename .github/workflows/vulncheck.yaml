@@ -1,0 +1,65 @@
+name: Vulnerability check
+
+# Fails the build on known vulnerabilities that our code actually calls.
+#
+# This is the gate that was missing: CI already ran Trivy in artifacts.yaml, but that job
+# only uploads SARIF and never fails, so a builder pinned to a Go with known stdlib CVEs
+# stayed green indefinitely. govulncheck is reachability-aware, so it reports the stdlib
+# version this repo is *built with* rather than every CVE present in the image.
+#
+# govulncheck assesses the standard library against the toolchain it runs under, so the
+# toolchain is pinned to go.mod's "go" directive via GOTOOLCHAIN below. That matters: run
+# it under a newer Go than go.mod declares and the scan comes back clean while the
+# released image is still built on a vulnerable toolchain — a false negative that would
+# defeat the point of this job. Keeping go.mod and the Dockerfile in lockstep is what
+# hack/update-go-toolchain.sh is for.
+
+on:
+  # Called by ci.yaml on push/PR so the artifacts job can gate on the result. Invoked
+  # from there rather than triggering directly here, to avoid running twice per PR.
+  workflow_call:
+  # Catch newly-disclosed CVEs against unchanged code.
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      # Pin the analysis toolchain to go.mod exactly. Go downloads it on demand if the
+      # runner's Go differs, so the scan can never silently use a newer, patched stdlib.
+      - name: Resolve toolchain from go.mod
+        id: toolchain
+        run: |
+          v="$(sed -nE 's/^go ([0-9]+\.[0-9]+(\.[0-9]+)?)$/\1/p' go.mod | head -1)"
+          if [ -z "$v" ]; then echo "could not parse go directive from go.mod" >&2; exit 1; fi
+          echo "value=go${v}" >> "$GITHUB_OUTPUT"
+          echo "Analysing against toolchain: go${v}"
+
+      - name: Install govulncheck
+        env:
+          # Build the tool with the runner's Go; only the analysis below is pinned.
+          GOTOOLCHAIN: local
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Run govulncheck
+        env:
+          GOTOOLCHAIN: ${{ steps.toolchain.outputs.value }}
+        run: |
+          go version
+          govulncheck ./...
