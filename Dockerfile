@@ -1,4 +1,6 @@
-FROM --platform=$BUILDPLATFORM golang:1.26.4-alpine3.22@sha256:727cfc3c40be55cd1bc9a4a059406b28a059857e3be752aa9d09531e12c20c56 AS builder
+# Tag suffix stays "-alpine": Renovate treats "-alpineX.Y" as a compatibility line and offers
+# nothing once upstream stops publishing it, which stalled this builder on a vulnerable Go.
+FROM --platform=$BUILDPLATFORM golang:1.26.7-alpine@sha256:28d89ee9cc0ff9fec75c82ca201e6bf7fdf9a679d4b7b24dfa04f2bb766bb468 AS builder
 
 RUN apk add --update --no-cache ca-certificates
 
