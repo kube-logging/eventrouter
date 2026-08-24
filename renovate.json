@@ -9,9 +9,6 @@
   ],
   "forkProcessing": "enabled",
   "configMigration": true,
-  "constraints": {
-    "go": "1.26"
-  },
   "customManagers": [
     {
       "customType": "regex",
@@ -63,6 +60,22 @@
       "matchPackageNames": [
         "k8s.io{/,}**"
       ]
+    },
+    {
+      "description": [
+        "Keep the go.mod toolchain directive current; Renovate leaves it alone by default.",
+        "It selects the toolchain CI installs, since the workflows use go-version-file: go.mod."
+      ],
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchDepTypes": [
+        "golang"
+      ],
+      "matchDepNames": [
+        "go"
+      ],
+      "rangeStrategy": "bump"
     },
     {
       "matchFileNames": [
